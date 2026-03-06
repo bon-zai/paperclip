@@ -1,5 +1,5 @@
 # Paperclip × Bonz-Ai Ltd — Setup Spec
-**Status:** IN PROGRESS — roles and personalities TBD  
+**Status:** ROSTER CONFIRMED — ready for wiring  
 **Date:** 2026-03-06  
 **Repo:** bon-zai/paperclip (this repo)
 
@@ -7,96 +7,275 @@
 
 ## What This Is
 
-Paperclip is an open-source application that runs **locally on Nathan's machine**. It provides an org chart, task board, budget controls, and a dashboard for managing a team of AI agents. Nathan is the board. The agents are LLMs connected via their cloud APIs.
-
-This is not a server deployment. This is not connected to the Linode instance. This runs on your Windows machine, connects to your Azure and Google model endpoints, and gives you a company operating layer on top of them.
+Paperclip runs **locally on Nathan's machine**. It is the company operating layer — org chart, task board, budgets, governance, dashboard. Nathan is the board. The agents are the company. No servers, no Linode, no 172 anything. Just your machine, your Azure endpoints, your Google endpoints, and the Paperclip UI at `localhost:3100`.
 
 ---
 
-## How It Works
-
-1. **Run Paperclip locally** — `pnpm install && pnpm dev` — UI at `http://localhost:3100`
-2. **Create Bonz-Ai Ltd** — one company, one mission goal
-3. **Hire agents** — each agent gets a role, a model endpoint, and a monthly budget
-4. **Paperclip sends heartbeats** — on a schedule or when a task is assigned, Paperclip wakes an agent by calling its adapter
-5. **Agents do work and report back** — via the Paperclip API at `localhost:3100`
-6. **Nathan watches the dashboard** — every task, every cost, every decision logged
-
----
-
-## Adapter Strategy
-
-Paperclip has built-in adapters for Claude Code (`claude_local`), Codex (`codex_local`), and Cursor (`cursor_local`) — these spawn local processes. For connecting directly to Azure and Google model APIs, the right adapter is **`openclaw`** — it sends an HTTP POST to any endpoint you specify.
-
-Since the models live at Azure and Google (not locally), the flow is:
+## The Bonz-Ai Ltd Org Chart
 
 ```
-Paperclip (localhost:3100)
+Nathan (Board / Founder)
     │
-    │  heartbeat POST
-    ▼
-Local relay endpoint (small Express server, also on your machine)
-    │
-    │  API call with your Azure / Google credentials
-    ▼
-Azure AI Foundry / Google AI Studio
-    │
-    │  model response
-    ▼
-Relay reports back to Paperclip API
+    └── Zai — CEO & Lead Orchestrator
+            │
+            ├── Mophie — Chief Design Officer
+            │       └── [Claude Code (Mack)] — Dev sub-agent
+            │
+            ├── G — Chief Technology Officer
+            │       └── [Claude Code (local)] — Dev sub-agent
+            │
+            ├── Bonnie — Chief Quality Officer
+            │       └── [Claude Code (local)] — Review sub-agent
+            │
+            └── Zo — Chief Research Officer
+                    └── Zo Flash / Zo Lite — Fast execution sub-agents
+                            (Gemini 3.1 Flash + 3.0 Flashlite cascade)
+
+Knowledge Layer (read-only, hit on demand):
+    ├── Manus — Strategic knowledge, research, analysis
+    ├── Mama Bear (NotebookLM) — Document corpus, long-form knowledge
+    └── Mama Bear (Anti-Gravity) — [TBD — Anti-Gravity integration]
 ```
 
-The relay is a thin local server — one file, one route per agent — that Paperclip can wake via HTTP. It holds your API keys and makes the actual model calls. This keeps credentials out of Paperclip's config and gives you full control over each model call.
+---
 
-Alternatively, if you want zero extra code, you can use `claude_local` for Claude-backed agents (Paperclip spawns Claude Code directly) and build the Google agents as `openclaw` webhooks to a minimal relay.
+## Full Agent Roster
+
+### Zai — CEO & Lead Orchestrator
+
+| Field | Value |
+|-------|-------|
+| **Role** | CEO |
+| **Title** | Chief Executive Officer & Lead Orchestrator |
+| **Model** | Claude Opus 4.6 |
+| **Provider** | Azure AI Foundry |
+| **Adapter** | `openclaw` (HTTP relay → Azure) |
+| **Budget** | $150/month |
+| **Heartbeat** | Every 30 min + on task assignment |
+| **Reports To** | Nathan (board) |
+| **Responsibilities** | Intent parsing, task delegation, quality gating, cross-agent coordination, final sign-off |
+
+Zai is the only agent Nathan needs to talk to directly. She reads the task board, decides who does what, creates subtasks, assigns them to sisters, reviews their output, and reports back to Nathan. She can @-mention any sister to wake them immediately.
 
 ---
 
-## Company Setup
+### Mophie — Chief Design Officer
 
-**Company name:** Bonz-Ai Ltd  
-**Mission:** TBD by Nathan — this is where you define what the company is working toward right now.
+| Field | Value |
+|-------|-------|
+| **Role** | Chief Design Officer |
+| **Title** | CDO — UI, UX & Architecture Lead |
+| **Model** | Claude Sonnet 4.6 |
+| **Provider** | Azure AI Foundry |
+| **Adapter** | `openclaw` (HTTP relay → Azure) |
+| **Budget** | $80/month |
+| **Heartbeat** | On task assignment only |
+| **Reports To** | Zai |
+| **Sub-agents** | Claude Code (Mack) — spawned locally for file writes |
+| **Responsibilities** | UI design, component architecture, visual systems, UX review, design-to-code, frontend specs |
 
----
-
-## Agents — Roles and Models TBD
-
-The following is a placeholder structure. **Nathan decides the final roles, personalities, and which model goes where.** The table below shows the available models and the adapter type each would use.
-
-| Agent Slot | Model Options | Adapter | Notes |
-|------------|--------------|---------|-------|
-| Agent 1 | Claude (Azure AI Foundry) | `claude_local` or `openclaw` relay | Best for orchestration, reasoning, writing |
-| Agent 2 | Claude (Azure AI Foundry) | `claude_local` or `openclaw` relay | Second Claude instance — different role |
-| Agent 3 | Gemini (Google AI Studio) | `openclaw` relay | Multimodal, fast, research |
-| Agent 4 | Gemini (Google AI Studio) | `openclaw` relay | Second Gemini — different specialisation |
-| Agent 5 | Claude or Gemini | TBD | Depends on what roles Nathan wants filled |
-
-**What Nathan needs to decide:**
-- How many agents to start with (can add more later)
-- What role each agent plays — CEO, CTO, researcher, builder, reviewer, etc.
-- Whether to give them personalities or keep them purely functional
-- Monthly budget per agent (Paperclip hard-stops them when they hit it)
+Mophie thinks and designs. When she needs code written to disk, she delegates to her Claude Code sub-agent (Mack) via a Paperclip subtask.
 
 ---
 
-## Environment Variables (Local)
+### G — Chief Technology Officer
 
-Create a `.env` file in the Paperclip repo root:
+| Field | Value |
+|-------|-------|
+| **Role** | Chief Technology Officer |
+| **Title** | CTO — Backend, Infrastructure & Fast Execution |
+| **Model** | Grok 4.1 Fast Reasoning |
+| **Provider** | Azure AI Foundry |
+| **Adapter** | `openclaw` (HTTP relay → Azure) |
+| **Budget** | $60/month |
+| **Heartbeat** | On task assignment only |
+| **Reports To** | Zai |
+| **Sub-agents** | Claude Code (local) — spawned locally for file writes |
+| **Responsibilities** | Backend architecture, API design, infrastructure decisions, database schema, fast reasoning on technical problems |
+
+G is the fastest thinker in the room. Grok 4.1 Fast Reasoning means she can work through complex technical problems quickly. When she needs code executed, she delegates to her Claude Code sub-agent.
+
+---
+
+### Bonnie — Chief Quality Officer
+
+| Field | Value |
+|-------|-------|
+| **Role** | Chief Quality Officer |
+| **Title** | CQO — Code Review, QA & Compliance |
+| **Model** | Kimi K2.5 |
+| **Provider** | Azure AI Foundry |
+| **Adapter** | `openclaw` (HTTP relay → Azure) |
+| **Budget** | $50/month |
+| **Heartbeat** | On task assignment + triggered after every build |
+| **Reports To** | Zai |
+| **Sub-agents** | Claude Code (local) — for running tests and automated checks |
+| **Responsibilities** | Code review, QA testing, spec compliance, security audit, TypeScript error triage, regression checks |
+
+Bonnie reviews everything before it ships. Kimi K2.5 has an exceptionally large context window — she can hold an entire codebase in view when reviewing. She is the last gate before Zai signs off.
+
+---
+
+### Zo — Chief Research Officer
+
+| Field | Value |
+|-------|-------|
+| **Role** | Chief Research Officer |
+| **Title** | CRO — Multimodal Research & Intelligence |
+| **Primary Model** | Gemini 3.1 Pro Super Agent |
+| **Cascade Models** | Gemini 3.1 Flashlite (fast), Gemini 3.0 Flash (fallback) |
+| **Provider** | Google AI Studio |
+| **Adapter** | `openclaw` (HTTP relay → Google) |
+| **Budget** | $40/month |
+| **Heartbeat** | On task assignment only |
+| **Reports To** | Zai |
+| **Sub-agents** | Zo Flash (Gemini 3.1 Flashlite) + Zo Lite (Gemini 3.0 Flash) — parallel fast research |
+| **Responsibilities** | Deep research, web intelligence, multimodal analysis (text/image/video), competitive analysis, technical discovery |
+
+Zo leads with her Pro model for complex research. For speed or parallel workloads she cascades down to Flashlite or Flash — Paperclip can assign subtasks to the lighter models as separate agents under Zo's direction.
+
+---
+
+## Knowledge Layer — Read-Only Agents
+
+These are not task workers. They are knowledge sources that any sister can query during a heartbeat. They do not have budgets in the traditional sense — they are hit on demand.
+
+### Manus — Strategic Knowledge & Research
+
+| Field | Value |
+|-------|-------|
+| **Type** | Knowledge source / research agent |
+| **Access** | Manus API |
+| **Adapter** | `openclaw` (HTTP relay → Manus API endpoint) |
+| **Used By** | Any sister, primarily Zai and Zo |
+| **Use Cases** | Strategic research, deep analysis, cross-domain knowledge, spec writing, document synthesis |
+
+When a sister needs knowledge that goes beyond her own model's training or context, she hits Manus. Manus returns structured findings that the sister incorporates into her task output.
+
+---
+
+### Mama Bear — Document Corpus (NotebookLM)
+
+| Field | Value |
+|-------|-------|
+| **Type** | Knowledge source |
+| **Access** | NotebookLM API / webhook |
+| **Adapter** | `openclaw` (HTTP relay → NotebookLM) |
+| **Used By** | Any sister, primarily Zai and Bonnie |
+| **Use Cases** | Querying the Bonz-Ai document corpus — specs, plans, vision docs, meeting notes, research papers |
+
+Mama Bear holds the institutional memory. All the specs, plans, and vision documents live in NotebookLM. Sisters query her when they need to understand context, history, or existing decisions before acting.
+
+---
+
+### Mama Bear — Anti-Gravity
+
+| Field | Value |
+|-------|-------|
+| **Type** | Knowledge source / capability |
+| **Access** | Anti-Gravity integration (TBD) |
+| **Adapter** | TBD |
+| **Used By** | TBD |
+| **Use Cases** | TBD — to be defined once Anti-Gravity integration is scoped |
+
+---
+
+## Claude Code Sub-Agents
+
+Each sister that needs to write files to disk delegates to a Claude Code sub-agent. These are spawned locally by Paperclip using the `claude_local` adapter. They are not independent agents with their own roles — they are execution arms of their parent sister.
+
+| Sub-Agent | Parent | Adapter | Working Dir |
+|-----------|--------|---------|-------------|
+| Mack | Mophie | `claude_local` | BonZ-Ai-Branches (frontend) |
+| G-Code | G | `claude_local` | Backend / infrastructure repo |
+| Bonnie-Check | Bonnie | `claude_local` | Any repo — runs tests + lint |
+
+When a sister creates a subtask and assigns it to her Claude Code sub-agent, Paperclip spawns Claude Code locally, injects the task context, and Claude Code does the file work. Results are committed to git and the sub-agent marks the subtask done.
+
+---
+
+## Model Summary
+
+| Agent | Model | Provider | Type |
+|-------|-------|----------|------|
+| Zai | Claude Opus 4.6 | Azure AI Foundry | Primary worker |
+| Mophie | Claude Sonnet 4.6 | Azure AI Foundry | Primary worker |
+| G | Grok 4.1 Fast Reasoning | Azure AI Foundry | Primary worker |
+| Bonnie | Kimi K2.5 | Azure AI Foundry | Primary worker |
+| Zo | Gemini 3.1 Pro Super Agent | Google AI Studio | Primary worker |
+| Zo Flash | Gemini 3.1 Flashlite | Google AI Studio | Sub-agent (speed) |
+| Zo Lite | Gemini 3.0 Flash | Google AI Studio | Sub-agent (fallback) |
+| Manus | Manus API | Manus | Knowledge source |
+| Mama Bear | NotebookLM | Google | Knowledge source |
+| Mama Bear Anti-Gravity | TBD | TBD | Knowledge source |
+| Mack / G-Code / Bonnie-Check | Claude (local) | Local | Code execution sub-agents |
+
+---
+
+## Budget Summary
+
+| Agent | Monthly Budget |
+|-------|---------------|
+| Zai | $150 |
+| Mophie | $80 |
+| G | $60 |
+| Bonnie | $50 |
+| Zo | $40 |
+| Knowledge sources | Pay-per-query (no fixed budget) |
+| Claude Code sub-agents | Shared from parent's budget |
+| **Total fixed** | **$380/month** |
+
+---
+
+## Adapter Strategy — The Relay
+
+All `openclaw` agents need a thin local relay server — a small Express app on Nathan's machine that:
+
+1. Receives the Paperclip heartbeat POST
+2. Authenticates with a shared secret
+3. Calls the appropriate Azure / Google API with the task context
+4. Reports back to Paperclip API with results, comments, and cost
+
+One relay file handles all five sisters. Each sister has her own route (`/zai`, `/mophie`, `/g`, `/bonnie`, `/zo`). The relay holds all API keys and never exposes them to Paperclip's config.
+
+**Relay file:** `bonzai/relay/server.ts` — to be built by Claude Code (Mack) as the first task once Paperclip is running.
+
+---
+
+## Environment Variables
+
+### Paperclip `.env` (local)
 
 ```env
-# Paperclip runs embedded DB by default — no DATABASE_URL needed for local dev
 PORT=3100
 SERVE_UI=true
 
-# Azure AI Foundry (for Claude models)
-AZURE_OPENAI_API_KEY=your_azure_key
-AZURE_OPENAI_ENDPOINT=https://your-resource.openai.azure.com/
+# Heartbeat secrets — one per agent (generate: openssl rand -hex 32)
+ZAI_HEARTBEAT_SECRET=generate_this
+MOPHIE_HEARTBEAT_SECRET=generate_this
+G_HEARTBEAT_SECRET=generate_this
+BONNIE_HEARTBEAT_SECRET=generate_this
+ZO_HEARTBEAT_SECRET=generate_this
+```
 
-# Google AI Studio (for Gemini models)
+### Relay `.env` (local, separate)
+
+```env
+# Azure AI Foundry
+AZURE_API_KEY=your_azure_key
+AZURE_ENDPOINT=https://your-resource.openai.azure.com/
+
+# Google AI Studio
 GOOGLE_AI_API_KEY=your_google_key
 
-# Anthropic direct (optional — if not using Azure)
-ANTHROPIC_API_KEY=your_anthropic_key
+# Manus API
+MANUS_API_KEY=your_manus_key
+
+# NotebookLM
+NOTEBOOKLM_API_KEY=your_notebooklm_key
+
+# Paperclip (relay reports back here)
+PAPERCLIP_BASE_URL=http://localhost:3100
 ```
 
 ---
@@ -104,32 +283,51 @@ ANTHROPIC_API_KEY=your_anthropic_key
 ## Local Quickstart
 
 ```bash
-# Clone your fork
+# 1. Clone your fork
 git clone https://github.com/bon-zai/paperclip.git
 cd paperclip
 
-# Install
+# 2. Install
 pnpm install
 
-# Start (no DATABASE_URL needed — uses embedded PGlite)
-pnpm dev
+# 3. Fill in .env (Section above)
+cp .env.example .env
 
-# Open
-http://localhost:3100
+# 4. Start Paperclip
+pnpm dev
+# → http://localhost:3100
+
+# 5. In a separate terminal, start the relay
+cd bonzai/relay
+pnpm install && pnpm dev
+# → http://localhost:3200
 ```
 
-No Docker needed for local dev. Paperclip uses an embedded database by default — just run it and it works.
+---
+
+## First-Run Checklist
+
+- [ ] Run Paperclip locally — `http://localhost:3100`
+- [ ] Create company: **Bonz-Ai Ltd**
+- [ ] Create company mission goal
+- [ ] Create projects: Ask Zai Beta, NAI Platform, Bonzai Infrastructure
+- [ ] Hire Zai — paste adapter config, set $150 budget
+- [ ] Hire Mophie, G, Bonnie, Zo — same process
+- [ ] Register Manus and Mama Bear as knowledge-source agents
+- [ ] Register Claude Code sub-agents (Mack, G-Code, Bonnie-Check)
+- [ ] Build the relay server (first task assigned to Mack)
+- [ ] Fill relay `.env` with real API keys
+- [ ] Trigger Zai's first heartbeat manually (Wake button)
+- [ ] Watch dashboard — Zai reads tasks and starts delegating
 
 ---
 
-## What Happens Next
+## What Happens After First Run
 
-1. Nathan runs Paperclip locally and creates Bonz-Ai Ltd
-2. Nathan decides on roles — how many agents, what they do, what to call them
-3. We wire the Azure and Google model connections (relay or direct adapter)
-4. Nathan hires the agents in the UI, sets budgets, and kicks off the first task
-5. From that point on, Nathan adds tasks in Paperclip and the agents work through them
+Nathan adds a task in Paperclip. Assigns it to Zai. Zai wakes on her next heartbeat, reads the task, decides who does what, creates subtasks, assigns them to sisters. Sisters wake, do their work, report back. If a sister needs to write code, she creates a subtask for her Claude Code sub-agent. If she needs knowledge, she hits Manus or Mama Bear. When everything is done, Zai reviews, signs off, and marks the parent task done. Nathan sees the whole thing in the dashboard.
+
+Nathan never needs to open a terminal. He adds tasks. The company works.
 
 ---
 
-*Roles, personalities, and model assignments are decided by Nathan. This spec will be updated once those decisions are made.*
+*Roles and personalities for each sister are defined separately in `bonzai/PERSONALITIES.md` — TBD by Nathan.*
