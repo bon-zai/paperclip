@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "@/lib/router";
 import type { Issue } from "@paperclipai/shared";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -9,6 +9,8 @@ import { projectsApi } from "../api/projects";
 import { useCompany } from "../context/CompanyContext";
 import { queryKeys } from "../lib/queryKeys";
 import { useProjectOrder } from "../hooks/useProjectOrder";
+import { getRecentAssigneeIds, sortAgentsByRecency, trackRecentAssignee } from "../lib/recent-assignees";
+import { formatAssigneeUserLabel } from "../lib/assignees";
 import { StatusIcon } from "./StatusIcon";
 import { PriorityIcon } from "./PriorityIcon";
 import { Identity } from "./Identity";
@@ -18,6 +20,9 @@ import { Separator } from "@/components/ui/separator";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { User, Hexagon, ArrowUpRight, Tag, Plus, Trash2 } from "lucide-react";
 import { AgentIcon } from "./AgentIconPicker";
+
+// TODO(issue-worktree-support): re-enable this UI once the workflow is ready to ship.
+const SHOW_EXPERIMENTAL_ISSUE_WORKTREE_UI = false;
 
 interface IssuePropertiesProps {
   issue: Issue;
@@ -175,23 +180,34 @@ export function IssueProperties({ issue, onUpdate, inline }: IssuePropertiesProp
     const project = orderedProjects.find((p) => p.id === id);
     return project?.name ?? id.slice(0, 8);
   };
+  const currentProject = issue.projectId
+    ? orderedProjects.find((project) => project.id === issue.projectId) ?? null
+    : null;
+  const currentProjectExecutionWorkspacePolicy = SHOW_EXPERIMENTAL_ISSUE_WORKTREE_UI
+    ? currentProject?.executionWorkspacePolicy ?? null
+    : null;
+  const currentProjectSupportsExecutionWorkspace = Boolean(currentProjectExecutionWorkspacePolicy?.enabled);
+  const usesIsolatedExecutionWorkspace = issue.executionWorkspaceSettings?.mode === "isolated"
+    ? true
+    : issue.executionWorkspaceSettings?.mode === "project_primary"
+      ? false
+      : currentProjectExecutionWorkspacePolicy?.defaultMode === "isolated";
   const projectLink = (id: string | null) => {
     if (!id) return null;
     const project = projects?.find((p) => p.id === id) ?? null;
     return project ? projectUrl(project) : `/projects/${id}`;
   };
 
+  const recentAssigneeIds = useMemo(() => getRecentAssigneeIds(), [assigneeOpen]);
+  const sortedAgents = useMemo(
+    () => sortAgentsByRecency((agents ?? []).filter((a) => a.status !== "terminated"), recentAssigneeIds),
+    [agents, recentAssigneeIds],
+  );
+
   const assignee = issue.assigneeAgentId
     ? agents?.find((a) => a.id === issue.assigneeAgentId)
     : null;
-  const userLabel = (userId: string | null | undefined) =>
-    userId
-      ? userId === "local-board"
-        ? "Board"
-        : currentUserId && userId === currentUserId
-          ? "Me"
-          : userId.slice(0, 5)
-      : null;
+  const userLabel = (userId: string | null | undefined) => formatAssigneeUserLabel(userId, currentUserId);
   const assigneeUserLabel = userLabel(issue.assigneeUserId);
   const creatorUserLabel = userLabel(issue.createdByUserId);
 
@@ -327,7 +343,22 @@ export function IssueProperties({ issue, onUpdate, inline }: IssuePropertiesProp
         >
           No assignee
         </button>
-        {issue.createdByUserId && (
+        {currentUserId && (
+          <button
+            className={cn(
+              "flex items-center gap-2 w-full px-2 py-1.5 text-xs rounded hover:bg-accent/50",
+              issue.assigneeUserId === currentUserId && "bg-accent",
+            )}
+            onClick={() => {
+              onUpdate({ assigneeAgentId: null, assigneeUserId: currentUserId });
+              setAssigneeOpen(false);
+            }}
+          >
+            <User className="h-3 w-3 shrink-0 text-muted-foreground" />
+            Assign to me
+          </button>
+        )}
+        {issue.createdByUserId && issue.createdByUserId !== currentUserId && (
           <button
             className={cn(
               "flex items-center gap-2 w-full px-2 py-1.5 text-xs rounded hover:bg-accent/50",
@@ -339,11 +370,10 @@ export function IssueProperties({ issue, onUpdate, inline }: IssuePropertiesProp
             }}
           >
             <User className="h-3 w-3 shrink-0 text-muted-foreground" />
-            {creatorUserLabel ? `Assign to ${creatorUserLabel === "Me" ? "me" : creatorUserLabel}` : "Assign to requester"}
+            {creatorUserLabel ? `Assign to ${creatorUserLabel}` : "Assign to requester"}
           </button>
         )}
-        {(agents ?? [])
-          .filter((a) => a.status !== "terminated")
+        {sortedAgents
           .filter((a) => {
             if (!assigneeSearch.trim()) return true;
             const q = assigneeSearch.toLowerCase();
@@ -356,7 +386,7 @@ export function IssueProperties({ issue, onUpdate, inline }: IssuePropertiesProp
               "flex items-center gap-2 w-full px-2 py-1.5 text-xs rounded hover:bg-accent/50",
               a.id === issue.assigneeAgentId && "bg-accent"
             )}
-            onClick={() => { onUpdate({ assigneeAgentId: a.id, assigneeUserId: null }); setAssigneeOpen(false); }}
+            onClick={() => { trackRecentAssignee(a.id); onUpdate({ assigneeAgentId: a.id, assigneeUserId: null }); setAssigneeOpen(false); }}
           >
             <AgentIcon icon={a.icon} className="shrink-0 h-3 w-3 text-muted-foreground" />
             {a.name}
@@ -396,7 +426,10 @@ export function IssueProperties({ issue, onUpdate, inline }: IssuePropertiesProp
             "flex items-center gap-2 w-full px-2 py-1.5 text-xs rounded hover:bg-accent/50 whitespace-nowrap",
             !issue.projectId && "bg-accent"
           )}
-          onClick={() => { onUpdate({ projectId: null }); setProjectOpen(false); }}
+          onClick={() => {
+            onUpdate({ projectId: null, executionWorkspaceSettings: null });
+            setProjectOpen(false);
+          }}
         >
           No project
         </button>
@@ -413,7 +446,15 @@ export function IssueProperties({ issue, onUpdate, inline }: IssuePropertiesProp
               "flex items-center gap-2 w-full px-2 py-1.5 text-xs rounded hover:bg-accent/50 whitespace-nowrap",
               p.id === issue.projectId && "bg-accent"
             )}
-            onClick={() => { onUpdate({ projectId: p.id }); setProjectOpen(false); }}
+            onClick={() => {
+              onUpdate({
+                projectId: p.id,
+                executionWorkspaceSettings: SHOW_EXPERIMENTAL_ISSUE_WORKTREE_UI && p.executionWorkspacePolicy?.enabled
+                  ? { mode: p.executionWorkspacePolicy.defaultMode === "isolated" ? "isolated" : "project_primary" }
+                  : null,
+              });
+              setProjectOpen(false);
+            }}
           >
             <span
               className="shrink-0 h-3 w-3 rounded-sm"
@@ -498,6 +539,42 @@ export function IssueProperties({ issue, onUpdate, inline }: IssuePropertiesProp
           {projectContent}
         </PropertyPicker>
 
+        {currentProjectSupportsExecutionWorkspace && (
+          <PropertyRow label="Workspace">
+            <div className="flex items-center justify-between gap-3 rounded-md border border-border px-2 py-1.5 w-full">
+              <div className="min-w-0">
+                <div className="text-sm">
+                  {usesIsolatedExecutionWorkspace ? "Isolated issue checkout" : "Project primary checkout"}
+                </div>
+                <div className="text-[11px] text-muted-foreground">
+                  Toggle whether this issue runs in its own execution workspace.
+                </div>
+              </div>
+              <button
+                className={cn(
+                  "relative inline-flex h-5 w-9 items-center rounded-full transition-colors",
+                  usesIsolatedExecutionWorkspace ? "bg-green-600" : "bg-muted",
+                )}
+                type="button"
+                onClick={() =>
+                  onUpdate({
+                    executionWorkspaceSettings: {
+                      mode: usesIsolatedExecutionWorkspace ? "project_primary" : "isolated",
+                    },
+                  })
+                }
+              >
+                <span
+                  className={cn(
+                    "inline-block h-3.5 w-3.5 rounded-full bg-white transition-transform",
+                    usesIsolatedExecutionWorkspace ? "translate-x-4.5" : "translate-x-0.5",
+                  )}
+                />
+              </button>
+            </div>
+          </PropertyRow>
+        )}
+
         {issue.parentId && (
           <PropertyRow label="Parent">
             <Link
@@ -519,6 +596,23 @@ export function IssueProperties({ issue, onUpdate, inline }: IssuePropertiesProp
       <Separator />
 
       <div className="space-y-1">
+        {(issue.createdByAgentId || issue.createdByUserId) && (
+          <PropertyRow label="Created by">
+            {issue.createdByAgentId ? (
+              <Link
+                to={`/agents/${issue.createdByAgentId}`}
+                className="hover:underline"
+              >
+                <Identity name={agentName(issue.createdByAgentId) ?? issue.createdByAgentId.slice(0, 8)} size="sm" />
+              </Link>
+            ) : (
+              <>
+                <User className="h-3.5 w-3.5 text-muted-foreground" />
+                <span className="text-sm">{creatorUserLabel ?? "User"}</span>
+              </>
+            )}
+          </PropertyRow>
+        )}
         {issue.startedAt && (
           <PropertyRow label="Started">
             <span className="text-sm">{formatDate(issue.startedAt)}</span>
